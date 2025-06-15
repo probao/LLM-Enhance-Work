@@ -19,6 +19,7 @@ client = Mistral(api_key=api_key)
 os.environ["OPENAI_API_BASE"] = "your_openai_api_base_url"
 os.environ["OPENAI_API_KEY"] = "your_openai_api_key"
 
+
 def process_pdf(uploaded_file, file_path, start_page, end_page):
     try:
         f_name = uploaded_file.name
@@ -168,6 +169,12 @@ def process_pdf(uploaded_file, file_path, start_page, end_page):
         st.error(f"处理过程中发生错误: {e}")
         return None
 
+def has_jpeg_images(directory="."):
+    for filename in os.listdir(directory):
+        if filename.lower().endswith(('.jpg', '.jpeg')):
+            return True
+    return False
+
 def zip_jpeg_files(output_zip_name="jpeg_images.zip"):
     """
     将当前文件夹中的所有 JPEG 文件打包成一个 zip 文件
@@ -181,7 +188,7 @@ def zip_jpeg_files(output_zip_name="jpeg_images.zip"):
         for filename in os.listdir(current_dir):
             if filename.lower().endswith(jpeg_extensions) and os.path.isfile(filename):
                 zipf.write(filename)
-    st.write(f"👋 zip file is ready！")
+    #st.write(f"👋 zip file is ready！")
     return output_zip_name
 
 def main():
@@ -214,21 +221,33 @@ def main():
                                  min_value=1,
                                  max_value=100)
     
-    # 添加处理按钮
-    # 放在顶部，页面第一次加载时就初始化 session_state 键
+    # 页面第一次加载时就初始化session_state
     if "markdown_ready" not in st.session_state:
         st.session_state.markdown_ready = False
 
     if "markdown_path" not in st.session_state:
         st.session_state.markdown_path = None
 
+    if "zip_ready" not in st.session_state:
+        st.session_state.zip_ready = False
+
+    if "zip_path" not in st.session_state:
+        st.session_state.zip_path = None
+    
+    # 改变session_state中的状态
     if uploaded_file is not None and st.button("Transform"):
         with st.spinner("正在处理PDF..."):
             if process_pdf(uploaded_file, save_path, start_page, end_page):
                 st.session_state.markdown_ready = True
                 st.session_state.markdown_path = "questions.md"
 
-    # 放在主逻辑中，无论按钮点没点过都可以访问
+            is_img = has_jpeg_images(directory=".")
+            if is_img:
+                zip_path = zip_jpeg_files(output_zip_name="jpeg_images.zip")
+                st.session_state.zip_ready = True
+                st.session_state.zip_path = zip_path
+
+    # 下载Markdown文件
     if st.session_state.markdown_ready and st.session_state.markdown_path:
         with open(st.session_state.markdown_path, "r", encoding="utf-8") as file:
             md_content = file.read()
@@ -239,26 +258,18 @@ def main():
             file_name="question.md",
             mime="text/markdown")
 
-    # 压缩打包照片并下载
-    if "zip_ready" not in st.session_state:
-        st.session_state.zip_ready = False
-
-    if not st.session_state.zip_ready:
+    # 下载zip文件
+    if st.session_state.zip_ready and st.session_state.zip_path:
         zip_path = zip_jpeg_files(output_zip_name="jpeg_images.zip")
-        st.session_state.zip_ready = True
-        st.session_state.zip_path = zip_path
-
-    #zip_file = zip_jpeg_files(output_zip_name="jpeg_images.zip")
-    with open(st.session_state.zip_path, "rb") as f:
+       
+        with open(st.session_state.zip_path, "rb") as f:
             st.download_button(
                 label="📥 Download ZIP File",
                 data=f,
                 file_name="folder_backup.zip",
                 mime="application/zip"
                 )
-    #st.session_state['md_content'] = markdown_content  # 保存处理结果
-    #st.write(f"👋 你好，{markdown_content}！")
-    st.success("处理完成！")
+            st.success("All Done!")
 
 
 if __name__ == "__main__":
